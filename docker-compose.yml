@@ -1,0 +1,84 @@
+version: '3.2'
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.13.2
+    volumes:
+      - ./elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
+      - elasticsearch:/var/lib/elasticsearch
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    environment:
+      ES_JAVA_OPTS: "-Xmx256m -Xms256m"
+      # Use single node discovery in order to disable production mode and avoid bootstrap checks.
+      # see: https://www.elastic.co/guide/en/elasticsearch/reference/current/bootstrap-checks.html
+      discovery.type: single-node
+    networks:
+      - elk
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:7.13.2
+    volumes:
+      - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+      - ./logstash/pipeline:/usr/share/logstash/pipeline:ro
+    ports:
+      - "5044:5044"
+    environment:
+      LS_JAVA_OPTS: "-Xmx256m -Xms256m"
+    networks:
+      - elk
+    depends_on:
+      - elasticsearch
+
+  # kibana:
+  #   image: docker.elastic.co/kibana/kibana:7.13.2
+  #   volumes:
+  #     - ./kibana/config/kibana.yml:/usr/share/kibana/config/kibana.yml:ro
+  #   ports:
+  #     - "5601:5601"
+  #   networks:
+  #     - elk
+  #   depends_on:
+  #     - elasticsearch
+
+  node_exporter:
+    image: prom/node-exporter
+    volumes:
+      - ./node_exporter/config:/var/node_exporter
+      - ./node_exporter/metrics:/tmp/node_exporter_metrics
+    command: --web.config=/var/node_exporter/web-config.yml --collector.textfile.directory=/tmp/node_exporter_metrics
+    ports:
+      - "9100:9100"
+    networks:
+      - elk
+
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./prometheus/config:/etc/prometheus
+      - prometheus:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - elk
+
+  grafana:
+    image: grafana/grafana:latest
+    volumes:
+      - grafana:/var/lib/grafana
+      - ./grafana/config:/etc/grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - elk
+
+
+networks:
+  elk:
+    driver: bridge
+
+volumes:
+  elasticsearch:
+  grafana:
+  prometheus:

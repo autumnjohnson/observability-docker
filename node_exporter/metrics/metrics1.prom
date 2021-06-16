@@ -1,0 +1,5 @@
+# HELP test_counter_total Example counter.
+# TYPE test_counter_total counter
+test_counter_total{counter="a"} 1654
+test_counter_total{counter="b"} 234
+test_counter_total{counter="c"} 12

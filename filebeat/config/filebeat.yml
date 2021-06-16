@@ -1,0 +1,97 @@
+###
+# Note that this is a config for filebeat on the *HOST* machine!
+# Run locally from this directory like
+# filebeat --path.config .
+
+logging:
+  level: debug
+#   to_stderr: true
+
+# setup.template.enabled: false
+
+# To test, use the /tmp/ paths and tail to the file from the live host:
+# ssh www@dmc3 tail -1000 /var/log/httpd/django-8787-error_log > /tmp/filebeat/django-8787-error_log
+
+# Following ECS field references
+# https://www.elastic.co/guide/en/ecs/1.8/ecs-field-reference.html
+
+filebeat.inputs:
+  # Celery log
+  # Examples:
+  # Basic log:
+  # [2021-06-15 17:11:09,574: INFO/Worker-2] Checking for new mail
+  # Log from celery (with process info)
+  # [2021-06-15 17:07:09,254: INFO/Worker-2] message_center.tasks.check_mail[4607f750-3433-4b8a-b10e-02adee371294]: Message appears to be a bounce
+  # Explicit metrics (as JSON)
+  # [2021-06-15 16:45:20,751: INFO/Worker-2] log_counter_metrics {"count": 6, "action": "touch", "net": "XJ.IRISDMC.2008-01-01.2008-12-31", "group": "mda", "mda_type": "station"}
+  - type: log
+    paths:
+      - "/tmp/filebeat/celery*.log"
+      # - /var/log/celery/celery.log
+    tags: ["celery-log"]
+    multiline:
+      type: pattern
+      pattern: '^\[[0-9]{4}-[0-9]{2}-[0-9]{2}'
+      negate: true
+      match: after
+    processors:
+      - dissect:
+          tokenizer: "[%{timestamp}: %{log.level}/%{worker}] %{message}"
+          target_prefix: ""
+          overwrite_keys: true
+      - dissect:
+          when:
+            regexp:
+              message: '^\w+\['
+          tokenizer: "%{log.logger}[%{process.entity_id}]: %{message}"
+          target_prefix: ""
+          overwrite_keys: true
+          ignore_failure: true
+      - dissect:
+          when:
+            regexp:
+              message: '^\w+ \{'
+          tokenizer: "%{message} %{metricsJSON}"
+          target_prefix: ""
+          overwrite_keys: true
+          ignore_failure: true
+  # Django (gunicorn) log
+  # Examples:
+  # Basic log:
+  # 2021-06-15 17:10:21,887 DEBUG Plotting with scale=1.25 (h=150.0, w=625.0, lw=0.375)
+  - type: log
+    paths:
+      - "/tmp/filebeat/django*log"
+      # - /var/log/httpd/django-*log
+    tags: ["django-log"]
+    multiline:
+      type: pattern
+      pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+      negate: true
+      match: after
+    processors:
+      - dissect:
+          tokenizer: "%{+timestamp} %{+timestamp} %{log.level} %{message}"
+          target_prefix: ""
+          overwrite_keys: true
+
+
+# output.elasticsearch:
+#   hosts: ["http://localhost:9200"]
+#   username: "elastic"
+#   password: "changeme"
+
+# output.console:
+#   codec:
+#     - rubydebug
+#  pretty: true
+
+# output.file:
+#   path: "/tmp/filebeat"
+#   filename: filebeat
+
+# setup.kibana:
+#   host: "localhost:5601"
+
+output.logstash:
+  hosts: ["localhost:5044"]
