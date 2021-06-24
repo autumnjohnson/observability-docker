@@ -74,6 +74,12 @@ filebeat.inputs:
           tokenizer: "%{+timestamp} %{+timestamp} %{log.level} %{message}"
           target_prefix: ""
           overwrite_keys: true
+  # Apache access log
+  - type: log
+    paths:
+      - /tmp/filebeat/*access_log
+      # - /var/log/httpd/*access_log
+    tags: ["access-log"]
 
 
 # output.elasticsearch:
